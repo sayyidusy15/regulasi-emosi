@@ -4,13 +4,25 @@ Emora adalah prototipe aplikasi responsif untuk belajar dan mengukur regulasi em
 
 ## Menjalankan proyek
 
-Membutuhkan Node.js 22.13 atau lebih baru.
+Membutuhkan Node.js 20.9 atau lebih baru. Versi yang direkomendasikan tersedia di `.nvmrc`.
 
 ```bash
 npm install
 npm run dev
 npm run build
 ```
+
+## Deploy ke Vercel
+
+Proyek ini menggunakan Next.js App Router standar dan tidak lagi bergantung pada Vinext, Wrangler, Cloudflare Worker, D1, R2, atau OpenAI Sites.
+
+1. Push repository ke GitHub, GitLab, atau Bitbucket.
+2. Pilih **Add New Project** di Vercel lalu impor repository.
+3. Pastikan Framework Preset terdeteksi sebagai **Next.js**.
+4. Biarkan Build Command `npm run build` dan Output Directory sebagai bawaan Next.js.
+5. Deploy.
+
+Opsional: isi `NEXT_PUBLIC_SITE_URL` dengan domain produksi lengkap, misalnya `https://emora.example.com`, agar metadata sosial selalu menggunakan domain utama. Tanpa variabel ini, Emora otomatis memakai URL deployment Vercel.
 
 ## Struktur
 
