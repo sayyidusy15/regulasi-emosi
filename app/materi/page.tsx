@@ -1,0 +1,6 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { Footer, PublicNavbar } from "@/components/emora";
+import { materials } from "@/data/emora";
+
+export default function Materi(){return <main className="site-shell inner-public"><PublicNavbar active="materi"/><header className="material-hero"><span className="section-kicker">PUSTAKA EMORA</span><h1>Pelajari Emosi dengan<br/><span>Rasa Ingin Tahu.</span></h1><p>Penjelasan ringan dan bertanggung jawab untuk menemani kamu memahami proses emosi—tanpa menggurui.</p><div className="material-hero-art"><span>⌁</span><i/><b>bacanya<br/>pelan-pelan</b></div></header><section className="material-list"><div className="material-filter"><button className="active">Semua</button><button>Dasar</button><button>Strategi</button><button>Instrumen</button></div><div className="material-grid">{materials.map((m,i)=><Link className={`material-card ${m.color}`} href={`/materi/${m.slug}`} key={m.slug}><header><span>{String(i+1).padStart(2,"0")}</span><b>{m.category}</b></header><div className="poster-doodle">{i%2?"◎":"⌁"}</div><h2>{m.title}</h2><p>{m.intro}</p><footer><span>{m.read}</span><b>Baca <ArrowRight size={16}/></b></footer></Link>)}</div></section><Footer/></main>}

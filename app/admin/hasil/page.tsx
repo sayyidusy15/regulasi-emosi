@@ -1,0 +1,5 @@
+import { Info } from "lucide-react";
+import { DashboardShell } from "@/components/emora";
+import { strategies, users } from "@/data/emora";
+
+export default function AdminHasil(){return <DashboardShell admin active="/admin/hasil" title="Hasil Pengukuran" description="Bandingkan nilai dimensi per responden secara bertanggung jawab."><div className="demo-banner"><Info/><p><strong>Nilai demonstrasi.</strong><span>Belum terhubung dengan spesifikasi skoring resmi ERQ-30.</span></p></div><div className="table-card raw-table"><div className="filter-bar"><input placeholder="Cari respondent ID..."/><select><option>Semua tanggal</option><option>7 hari terakhir</option></select><span>{users.length} hasil</span></div><div className="table-scroll"><table><thead><tr><th>Respondent ID</th>{strategies.map(s=><th key={s.id}>S{String(s.id).padStart(2,"0")}</th>)}<th>Tanggal selesai</th></tr></thead><tbody>{users.filter(u=>u.status==="Selesai").map((u,row)=><tr key={u.id}><td><strong>{u.id}</strong></td>{strategies.map((s,i)=><td key={s.id}>{50+((s.score+i+row*4)%39)}</td>)}<td>{u.date}</td></tr>)}</tbody></table></div></div></DashboardShell>}

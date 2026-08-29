@@ -1,0 +1,5 @@
+import { AdminPageNote } from "@/components/admin";
+import { DashboardShell } from "@/components/emora";
+
+const rows=["R-1042","R-1041","R-1040","R-1038","R-1037"];
+export default function Jawaban(){return <DashboardShell admin active="/admin/jawaban" title="Jawaban Mentah" description="Telusuri respons per butir tanpa memadatkan seluruh data ke satu layar."><AdminPageNote>Data jawaban ditampilkan apa adanya untuk kebutuhan riset. Hindari menarik interpretasi klinis langsung dari nilai mentah.</AdminPageNote><div className="table-card raw-table"><div className="filter-bar"><input placeholder="Cari respondent ID..."/><select><option>Kolom Q01–Q10</option><option>Kolom Q11–Q20</option><option>Kolom Q21–Q30</option></select><span>30 kolom tersedia</span></div><div className="table-scroll"><table><thead><tr><th>Respondent ID</th>{Array.from({length:12},(_,i)=><th key={i}>Q{String(i+1).padStart(2,"0")}</th>)}<th>Tanggal</th></tr></thead><tbody>{rows.map((id,row)=><tr key={id}><td><strong>{id}</strong></td>{Array.from({length:12},(_,i)=><td key={i}>{((i+row*2)%7)+1}</td>)}<td>28/08/26</td></tr>)}</tbody></table></div></div></DashboardShell>}
