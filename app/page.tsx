@@ -25,12 +25,17 @@ import {
   Wind,
 } from "lucide-react";
 import { Footer, PublicNavbar } from "@/components/emora";
-import { materials, strategies } from "@/data/emora";
+import { strategies } from "@/data/emora";
+import { getPublishedMaterials } from "@/lib/materials";
+import { getCurrentUser } from "@/lib/session";
 
 const strategyIcons = [Brain, Sun, CircleCheckBig, Wind, UsersRound, Eye, Heart, Leaf, ClipboardList, Focus];
 const materialIcons = [HeartPulse, Fingerprint, Route];
 
-export default function Home() {
+export default async function Home() {
+  const [user,materials]=await Promise.all([getCurrentUser(),getPublishedMaterials().catch(()=>[])]);
+  const assessmentHref=user?.role==="admin"?"/admin":user?"/app/pengukuran":"/register";
+  const assessmentLabel=user?.role==="admin"?"Buka Dashboard":user?"Lanjut Pengukuran":"Mulai Pengukuran";
   return (
     <main className="site-shell">
       <PublicNavbar active="home" />
@@ -41,7 +46,7 @@ export default function Home() {
           <h1 id="hero-title">Kenali Cara Kamu<br />Mengelola <span>Emosi</span></h1>
           <p>Emora membantu kamu memahami strategi regulasi emosi melalui ERQ-30 dengan cara yang lebih mudah, nyaman, dan menyenangkan.</p>
           <div className="hero-actions">
-            <Link className="primary-button" href="/register"><Rocket size={19} /> Mulai Pengukuran <ArrowRight size={20} /></Link>
+            <Link className="primary-button" href={assessmentHref}><Rocket size={19} /> {assessmentLabel} <ArrowRight size={20} /></Link>
             <Link className="secondary-button" href="/#regulasi"><BookOpen size={19} /> Pelajari Dulu <ArrowRight size={20} /></Link>
           </div>
           <div className="trust-row" aria-label="Keunggulan Emora">
@@ -67,7 +72,7 @@ export default function Home() {
 
       <section className="erq-section" id="erq30">
         <div className="erq-copy"><span className="section-kicker">TENTANG PENGUKURAN</span><h2>Kenalan dengan <span>ERQ-30</span></h2><p>Pengukuran disajikan satu per satu agar kamu bisa menjawab dengan tenang. Tidak ada jawaban yang “paling benar”—pilih yang paling sesuai dengan dirimu.</p><div className="erq-stats"><div><b>30</b><span>Pertanyaan</span></div><div><b>10</b><span>Strategi</span></div><div><b>±</b><span>Beberapa menit</span></div></div><Link className="secondary-button" href="/app/pengukuran">Pelajari cara pengukurannya <ArrowRight size={18}/></Link></div>
-        <div className="paper-visual"><span className="paper-clip"/><div className="paper-head"><ClipboardCheck/><p><strong>Pengukuran ERQ-30</strong><small>Contoh tampilan</small></p></div><div className="paper-progress"><i/></div><h3>Item ERQ-30 08</h3><div className="paper-scale">{[1,2,3,4,5,6,7].map(x=><span key={x}>{x}</span>)}</div><p className="paper-note">Butir tervalidasi akan disediakan pemilik riset.</p></div>
+        <div className="paper-visual"><span className="paper-clip"/><div className="paper-head"><ClipboardCheck/><p><strong>Pengukuran ERQ-30</strong><small>Contoh tampilan</small></p></div><div className="paper-progress"><i/></div><h3>Item ERQ-30 08</h3><div className="paper-scale">{[1,2,3,4,5,6,7].map(x=><span key={x}>{x}</span>)}</div><p className="paper-note">Versi Indonesia ditampilkan bersama teks Inggris aslinya.</p></div>
       </section>
 
       <section className="strategies-section"><div className="section-heading"><span className="section-kicker">POLA YANG BISA MUNCUL</span><h2>10 Cara Saat Kita<br/>Mengelola Emosi</h2><p>Setiap strategi ditampilkan sebagai dimensi terpisah, tanpa label baik atau buruk.</p></div><div className="strategy-grid">{strategies.map((s)=>{const StrategyIcon=strategyIcons[s.id-1];return <article className={`strategy-card ${s.color}`} key={s.id}><span className="strategy-no">{String(s.id).padStart(2,"0")}</span><div className="strategy-symbol" aria-hidden="true"><StrategyIcon/></div><h3>{s.name}</h3><p>{s.short}</p></article>})}</div></section>
@@ -76,9 +81,9 @@ export default function Home() {
 
       <section className="result-section"><div className="demo-chart"><header><p><strong>Gambaran strategimu</strong><span>Data contoh</span></p><b>10 dimensi</b></header>{strategies.slice(0,5).map(s=><div className="demo-bar" key={s.id}><span>{s.name}</span><i><b style={{width:`${s.score}%`}}/></i><strong>{s.score}</strong></div>)}</div><div className="result-copy"><span className="section-kicker">PREVIEW HASIL</span><h2>Bukan Sekadar Angka.</h2><p>Setelah selesai, kamu dapat melihat gambaran strategi regulasi emosi yang muncul dari jawabanmu. Nilai disajikan per dimensi, tanpa diagnosis dan tanpa kategori klinis yang dibuat-buat.</p><div className="neutral-note"><span>i</span><p><strong>Ditampilkan secara netral</strong><small>Nilai di samping hanya data contoh untuk demonstrasi desain.</small></p></div><Link className="secondary-button" href="/app/hasil">Lihat cara membaca hasil <ArrowRight size={18}/></Link></div></section>
 
-      <section className="learning-section"><div className="section-heading"><span className="section-kicker">BELAJAR BERSAMA EMORA</span><h2>Pelajari Emosi dengan<br/>Cara yang Lebih Ringan.</h2></div><div className="poster-grid">{materials.slice(0,3).map((m,i)=>{const MaterialIcon=materialIcons[i]??BookHeart;return <Link className={`article-poster ${m.color}`} href={`/materi/${m.slug}`} key={m.slug}><span>{m.category} · {m.read}</span><div className="poster-doodle" aria-hidden="true"><MaterialIcon/></div><h3>{m.title}</h3><p>{m.intro}</p><b>Baca materi <ArrowRight size={16}/></b></Link>})}</div><Link className="text-link" href="/materi">Lihat semua materi <ArrowRight size={17}/></Link></section>
+      <section className="learning-section"><div className="section-heading"><span className="section-kicker">BELAJAR BERSAMA EMORA</span><h2>Pelajari Emosi dengan<br/>Cara yang Lebih Ringan.</h2></div>{materials.length?<div className="poster-grid">{materials.slice(0,3).map((m,i)=>{const MaterialIcon=materialIcons[i]??BookHeart;const color=["coral","lavender","mint"][i%3];return <Link className={`article-poster ${color}`} href={`/materi/${m.slug}`} key={m.slug}><span>MATERI EMORA</span><div className="poster-doodle" aria-hidden="true"><MaterialIcon/></div><h3>{m.title}</h3><p>{m.summary}</p><b>Baca materi <ArrowRight size={16}/></b></Link>})}</div>:<div className="empty-state"><div><h3>Belum ada materi diterbitkan.</h3><p>Materi baru akan muncul setelah dipublikasikan oleh pengelola.</p></div></div>}<Link className="text-link" href="/materi">Lihat semua materi <ArrowRight size={17}/></Link></section>
 
-      <section className="final-cta"><div><span>Yuk, mulai dari rasa ingin tahu.</span><h2>Siap Mengenal Cara Kamu<br/>Mengelola Emosi?</h2><p>Luangkan beberapa menit untuk mengenal pola regulasi emosimu melalui ERQ-30.</p><Link className="primary-button" href="/register"><Rocket size={19}/>Mulai Pengukuran<ArrowRight size={18}/></Link></div><div className="cta-art"><span>⌣</span><i/><b>kenali<br/>dirimu</b></div></section>
+      <section className="final-cta"><div><span>Yuk, mulai dari rasa ingin tahu.</span><h2>Siap Mengenal Cara Kamu<br/>Mengelola Emosi?</h2><p>Luangkan beberapa menit untuk mengenal pola regulasi emosimu melalui ERQ-30.</p><Link className="primary-button" href={assessmentHref}><Rocket size={19}/>{assessmentLabel}<ArrowRight size={18}/></Link></div><div className="cta-art"><span>⌣</span><i/><b>kenali<br/>dirimu</b></div></section>
       <Footer />
     </main>
   );

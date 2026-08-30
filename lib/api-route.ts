@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { AppsScriptError } from "@/lib/apps-script";
 
 export const SESSION_COOKIE = "emora_session";
+export const IDENTITY_COOKIE = "emora_identity";
 
 export async function sessionToken() {
   return (await cookies()).get(SESSION_COOKIE)?.value || "";

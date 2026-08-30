@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build",
+    "test": "npm run test:scoring && npm run build",
+    "test:scoring": "node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern .next"
   },
   "dependencies": {

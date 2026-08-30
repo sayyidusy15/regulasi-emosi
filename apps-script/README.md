@@ -46,7 +46,6 @@ Sheet `Questions` akan langsung mendapat 30 item Q01–Q30. Kolom `question_text
 
    - Property: `SPREADSHEET_ID`
    - Value: ID spreadsheet dari langkah pertama
-
 5. Tambahkan satu properti lagi:
 
    - Property: `APP_SECRET`
@@ -68,7 +67,7 @@ Salin hasilnya tanpa spasi. Jangan membagikan nilai ini dan jangan menaruhnya da
 4. Google akan meminta izin. Pilih akun pemilik spreadsheet, tinjau izin, lalu klik **Allow**.
 5. Kembali ke spreadsheet. Tujuh worksheet beserta header-nya seharusnya sudah tersedia.
 
-Jika fungsi dijalankan lagi, sheet yang sudah ada tidak akan dihapus.
+Jika fungsi dijalankan lagi, `repairDatabase()` akan menormalkan header dan menambahkan kolom wajib sambil mempertahankan data peserta yang sudah ada. Sheet `Questions` kemudian diisi ulang dengan tepat 30 item ERQ-30.
 
 ### 5. Periksa instrumen ERQ-30
 
@@ -79,7 +78,7 @@ Tidak ada pengisian manual yang diperlukan. Setelah `setupDatabase()` selesai:
 3. Pastikan `translation_status` berisi `draft_translation` dan `is_active` berisi `TRUE`.
 4. Teks Inggris adalah sumber resmi. Teks Indonesia adalah terjemahan proyek untuk ditinjau dan tidak boleh disebut versi Indonesia tervalidasi.
 
-Jika worksheet `Questions` sudah ada dari versi Emora sebelumnya, salin kode Apps Script terbaru lalu jalankan `reseedErq30Questions()` satu kali. Fungsi tersebut hanya mengganti baris Q01–Q30 dan tidak mengubah Users, Biodata, Assessments, Responses, Results, atau Materials.
+Jika worksheet `Questions` sudah ada dari versi Emora sebelumnya, salin kode Apps Script terbaru lalu jalankan `reseedErq30Questions()` satu kali. Fungsi tersebut mengganti isi sheet `Questions` dengan tepat Q01–Q30 dan tidak mengubah Users, Biodata, Assessments, Responses, Results, atau Materials.
 
 `seedErq30Questions()` aman dijalankan berulang kali karena memperbarui item berdasarkan ID tanpa membuat duplikasi.
 
@@ -105,7 +104,6 @@ Walaupun akses Web App disetel ke Anyone, setiap permintaan tetap harus membawa 
 
    - `APPS_SCRIPT_API_URL` = Web app URL dari langkah sebelumnya
    - `APPS_SCRIPT_API_SECRET` = nilai yang sama dengan `APP_SECRET`
-
 4. Aktifkan untuk Production, Preview, dan Development bila diperlukan.
 5. Simpan, lalu lakukan **Redeploy** pada website.
 

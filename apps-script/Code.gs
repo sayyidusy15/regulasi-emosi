@@ -79,11 +79,20 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const BIODATA_FIELDS = ["nama", "usia", "jenis_kelamin", "pendidikan", "pekerjaan", "domisili"];
 
 function setupDatabase() {
-  const spreadsheet = getSpreadsheet_();
-  Object.keys(SHEETS).forEach(name => ensureSheet_(spreadsheet, name, SHEETS[name]));
+  repairDatabase();
   seedErq30Questions();
   seedMaterials_();
   return "Database Emora siap. Semua 30 item ERQ-30 telah dimasukkan dan diaktifkan.";
+}
+
+function repairDatabase() {
+  const spreadsheet = getSpreadsheet_();
+  const report = {};
+  Object.keys(SHEETS).forEach(name => {
+    report[name] = repairSheet_(spreadsheet, name, SHEETS[name]);
+  });
+  logEvent_("database_repaired", report);
+  return report;
 }
 
 function doGet(e) {
@@ -93,7 +102,7 @@ function doGet(e) {
 function doPost(e) {
   let body = {};
   try { body = e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {}; }
-  catch (error) { return json_({ ok: false, error: "Payload JSON tidak valid." }); }
+  catch (error) { return jsonError("INVALID_JSON", "Payload JSON tidak valid."); }
   return handleRequest_(Object.assign({}, e && e.parameter ? e.parameter : {}, body, { _method: "POST" }));
 }
 
@@ -107,8 +116,13 @@ function handleRequest_(payload) {
       login: () => login_(payload),
       logout: () => logout_(payload),
       getProfile: () => getProfile_(payload),
+      getMe: () => getProfile_(payload),
+      getUserDashboard: () => getUserDashboard_(payload),
+      getBiodata: () => getProfile_(payload),
       saveBiodata: () => saveBiodata_(payload),
       startAssessment: () => startAssessment_(payload),
+      getAssessment: () => getAssessment_(payload),
+      getQuestions: () => getQuestions_(payload),
       saveAssessment: () => saveAssessment_(payload),
       submitAssessment: () => submitAssessment_(payload),
       getMyResult: () => getMyResult_(payload),
@@ -119,12 +133,18 @@ function handleRequest_(payload) {
       adminResponses: () => adminResponses_(payload),
       adminResults: () => adminResults_(payload),
       adminInstrument: () => adminInstrument_(payload),
-      exportData: () => exportData_(payload)
+      exportData: () => exportData_(payload),
+      adminExport: () => exportData_(payload)
     };
     if (!routes[action]) throw new Error("Action API tidak dikenal.");
-    return json_({ ok: true, data: routes[action]() });
+    const data = routes[action]();
+    logEvent_("api_success", { action });
+    return jsonSuccess(data);
   } catch (error) {
-    return json_({ ok: false, error: error && error.message ? error.message : "Terjadi kesalahan pada server." });
+    const message = error && error.message ? error.message : "Terjadi kesalahan pada server.";
+    const code = errorCode_(message);
+    logEvent_("api_error", { action: String(payload.action || ""), code, message });
+    return jsonError(code, message);
   }
 }
 
@@ -136,17 +156,19 @@ function register_(payload) {
   if (name.length < 2) throw new Error("Nama terlalu pendek.");
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Alamat email tidak valid.");
   if (password.length < 8) throw new Error("Password minimal 8 karakter.");
-  if (findBy_("Users", "email", email)) throw new Error("Email sudah terdaftar.");
-
-  const now = now_();
-  const salt = randomToken_().slice(0, 48);
-  const user = {
-    id: makeId_("USR"), name, email,
-    password_hash: hashPassword_(password, salt), password_salt: salt,
-    role: "user", status: "active", created_at: now, updated_at: now
-  };
-  appendObject_("Users", user);
-  return createSessionResponse_(user);
+  return withScriptLock_(() => {
+    if (findBy_("Users", "email", email)) throw new Error("Akun dengan email tersebut sudah terdaftar.");
+    const now = now_();
+    const salt = randomToken_().slice(0, 48);
+    const user = {
+      id: makeId_("USR"), name, email,
+      password_hash: hashPassword_(password, salt), password_salt: salt,
+      role: "user", status: "active", created_at: now, updated_at: now
+    };
+    appendObjectUnlocked_("Users", user);
+    logEvent_("user_registered", { userId: user.id, role: user.role });
+    return createSessionResponse_(user);
+  });
 }
 
 function login_(payload) {
@@ -171,6 +193,23 @@ function getProfile_(payload) {
   return { user: safeUser_(user), biodata: biodata || null, assessment: assessment || null };
 }
 
+function getUserDashboard_(payload) {
+  const user = requireUser_(payload.token);
+  const biodata = findBy_("Biodata", "user_id", user.id);
+  const assessments = rowsAsObjects_("Assessments").filter(row => row.user_id === user.id).sort(sortNewest_);
+  const assessment = assessments[0] || null;
+  const response = assessment ? findBy_("Responses", "assessment_id", assessment.id) : null;
+  const result = assessment ? findBy_("Results", "assessment_id", assessment.id) : null;
+  return {
+    user: safeUser_(user), biodata: biodata || null,
+    biodataStatus: biodata ? "complete" : "incomplete",
+    assessment, assessmentStatus: assessment ? assessment.status : "not_started",
+    answeredCount: Object.keys(responseToAnswers_(response)).length,
+    latestResultSummary: result ? decorateResult_(result) : null,
+    materials: getMaterials_().slice(0, 3)
+  };
+}
+
 function saveBiodata_(payload) {
   const user = requireUser_(payload.token);
   const data = payload.biodata || {};
@@ -178,65 +217,96 @@ function saveBiodata_(payload) {
   BIODATA_FIELDS.forEach(key => clean[key] = data[key] == null ? "" : String(data[key]).trim());
   if (!clean.nama) clean.nama = user.name;
   if (clean.usia && (!Number.isInteger(Number(clean.usia)) || Number(clean.usia) < 12 || Number(clean.usia) > 120)) throw new Error("Usia tidak valid.");
-  const existing = findBy_("Biodata", "user_id", user.id);
-  const now = now_();
-  const record = Object.assign({}, existing || {}, clean, {
-    id: existing ? existing.id : makeId_("BIO"), user_id: user.id,
-    created_at: existing ? existing.created_at : now, updated_at: now
+  return withScriptLock_(() => {
+    const existing = findBy_("Biodata", "user_id", user.id);
+    const now = now_();
+    const record = Object.assign({}, existing || {}, clean, {
+      id: existing ? existing.id : makeId_("BIO"), user_id: user.id,
+      created_at: existing ? existing.created_at : now, updated_at: now
+    });
+    upsertObjectUnlocked_("Biodata", "user_id", user.id, record);
+    return record;
   });
-  upsertObject_("Biodata", "user_id", user.id, record);
-  return record;
 }
 
 function startAssessment_(payload) {
   const user = requireUser_(payload.token);
-  const all = rowsAsObjects_("Assessments").filter(row => row.user_id === user.id);
-  let assessment = all.filter(row => row.status === "in_progress").sort(sortNewest_)[0];
-  if (!assessment) {
-    const completed = all.filter(row => row.status === "completed").sort(sortNewest_)[0];
-    if (completed && !payload.allowRepeat) assessment = completed;
-  }
-  if (!assessment || (assessment.status === "completed" && payload.allowRepeat)) {
-    const now = now_();
-    assessment = { id: makeId_("ASM"), user_id: user.id, status: "in_progress", started_at: now, completed_at: "", created_at: now };
-    appendObject_("Assessments", assessment);
-  }
+  const questions = activeQuestions_();
+  if (questions.length !== 30) throw new Error("Instrumen ERQ-30 belum memiliki tepat 30 pertanyaan aktif yang valid.");
+  return withScriptLock_(() => {
+    const all = rowsAsObjects_("Assessments").filter(row => row.user_id === user.id);
+    let assessment = all.filter(row => row.status === "in_progress").sort(sortNewest_)[0];
+    if (!assessment) {
+      const completed = all.filter(row => row.status === "completed").sort(sortNewest_)[0];
+      if (completed && !payload.allowRepeat) assessment = completed;
+    }
+    if (!assessment || (assessment.status === "completed" && payload.allowRepeat)) {
+      const now = now_();
+      assessment = { id: makeId_("ASM"), user_id: user.id, status: "in_progress", started_at: now, completed_at: "", created_at: now };
+      appendObjectUnlocked_("Assessments", assessment);
+    }
+    const response = findBy_("Responses", "assessment_id", assessment.id);
+    return { assessment, answers: responseToAnswers_(response), questions };
+  });
+}
+
+function getQuestions_(payload) {
+  requireUser_(payload.token);
+  return activeQuestions_();
+}
+
+function getAssessment_(payload) {
+  const user = requireUser_(payload.token);
+  const assessment = payload.assessmentId ? findBy_("Assessments", "id", payload.assessmentId) : latestByUser_("Assessments", user.id);
+  if (!assessment || assessment.user_id !== user.id) return null;
   const response = findBy_("Responses", "assessment_id", assessment.id);
-  const questions = rowsAsObjects_("Questions").filter(row => truthy_(row.is_active) && String(row.question_text_en).trim()).sort((a, b) => Number(a.question_number) - Number(b.question_number));
-  return { assessment, answers: responseToAnswers_(response), questions };
+  return { assessment, answers: responseToAnswers_(response), questions: activeQuestions_() };
+}
+
+function activeQuestions_() {
+  const questions = rowsAsObjects_("Questions")
+    .filter(row => truthy_(row.is_active) && String(row.question_text_en || "").trim())
+    .sort((a, b) => Number(a.question_number) - Number(b.question_number));
+  questions.filter(row => !String(row.question_text_id || "").trim()).forEach(row => logEvent_("missing_indonesian_translation", { questionId: row.id }));
+  return questions;
 }
 
 function saveAssessment_(payload) {
   const user = requireUser_(payload.token);
   requireFields_(payload, ["assessmentId"]);
-  const assessment = findBy_("Assessments", "id", payload.assessmentId);
-  if (!assessment || assessment.user_id !== user.id) throw new Error("Assessment tidak ditemukan.");
-  if (assessment.status === "completed") throw new Error("Assessment sudah dikirim.");
-  const existing = findBy_("Responses", "assessment_id", assessment.id);
-  const answers = normalizeAnswers_(payload.answers || {});
-  const record = Object.assign(emptyResponse_(assessment.id, user.id), existing || {}, answers, { updated_at: now_() });
-  upsertObject_("Responses", "assessment_id", assessment.id, record);
-  return { assessmentId: assessment.id, saved: Object.keys(responseToAnswers_(record)).length, updatedAt: record.updated_at };
+  return withScriptLock_(() => {
+    const assessment = findBy_("Assessments", "id", payload.assessmentId);
+    if (!assessment || assessment.user_id !== user.id) throw new Error("Assessment tidak ditemukan.");
+    if (assessment.status === "completed") throw new Error("Assessment sudah dikirim.");
+    const existing = findBy_("Responses", "assessment_id", assessment.id);
+    const answers = normalizeAnswers_(payload.answers || {});
+    const record = Object.assign(emptyResponse_(assessment.id, user.id), existing || {}, answers, { updated_at: now_() });
+    upsertObjectUnlocked_("Responses", "assessment_id", assessment.id, record);
+    return { assessmentId: assessment.id, saved: Object.keys(responseToAnswers_(record)).length, updatedAt: record.updated_at };
+  });
 }
 
 function submitAssessment_(payload) {
   const user = requireUser_(payload.token);
-  const assessment = findBy_("Assessments", "id", payload.assessmentId);
-  if (!assessment || assessment.user_id !== user.id) throw new Error("Assessment tidak ditemukan.");
-  if (assessment.status === "completed") return getResultForAssessment_(assessment.id, user.id);
-  const existing = findBy_("Responses", "assessment_id", assessment.id);
-  const record = Object.assign(emptyResponse_(assessment.id, user.id), existing || {}, normalizeAnswers_(payload.answers || {}));
-  const answers = responseToAnswers_(record);
-  if (Object.keys(answers).length !== 30) throw new Error("Semua 30 pertanyaan harus dijawab sebelum dikirim.");
-  record.updated_at = now_();
-  record.submitted_at = record.updated_at;
-  upsertObject_("Responses", "assessment_id", assessment.id, record);
-  assessment.status = "completed";
-  assessment.completed_at = record.submitted_at;
-  upsertObject_("Assessments", "id", assessment.id, assessment);
-  const result = calculateResult_(assessment.id, user.id, answers);
-  upsertObject_("Results", "assessment_id", assessment.id, result);
-  return decorateResult_(result);
+  return withScriptLock_(() => {
+    const assessment = findBy_("Assessments", "id", payload.assessmentId);
+    if (!assessment || assessment.user_id !== user.id) throw new Error("Assessment tidak ditemukan.");
+    if (assessment.status === "completed") return getResultForAssessment_(assessment.id, user.id);
+    const existing = findBy_("Responses", "assessment_id", assessment.id);
+    const record = Object.assign(emptyResponse_(assessment.id, user.id), existing || {}, normalizeAnswers_(payload.answers || {}));
+    const answers = responseToAnswers_(record);
+    if (Object.keys(answers).length !== 30) throw new Error("Semua 30 pertanyaan harus dijawab sebelum dikirim.");
+    record.updated_at = now_();
+    record.submitted_at = record.updated_at;
+    upsertObjectUnlocked_("Responses", "assessment_id", assessment.id, record);
+    assessment.status = "completed";
+    assessment.completed_at = record.submitted_at;
+    upsertObjectUnlocked_("Assessments", "id", assessment.id, assessment);
+    const result = calculateResult_(assessment.id, user.id, answers);
+    upsertObjectUnlocked_("Results", "assessment_id", assessment.id, result);
+    logEvent_("assessment_submitted", { assessmentId: assessment.id, userId: user.id });
+    return decorateResult_(result);
+  });
 }
 
 function getMyResult_(payload) {
@@ -246,12 +316,13 @@ function getMyResult_(payload) {
 }
 
 function getMaterials_() {
-  return rowsAsObjects_("Materials").filter(row => row.status === "published").sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+  return rowsAsObjects_("Materials").filter(row => String(row.status).toLowerCase() === "published").sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
 }
 
 function adminDashboard_(payload) {
   requireAdmin_(payload.token);
   const users = rowsAsObjects_("Users").filter(row => row.role === "user");
+  const biodata = indexBy_(rowsAsObjects_("Biodata"), "user_id");
   const assessments = rowsAsObjects_("Assessments");
   const completed = assessments.filter(row => row.status === "completed").length;
   const inProgress = assessments.filter(row => row.status === "in_progress").length;
@@ -259,7 +330,7 @@ function adminDashboard_(payload) {
   return {
     totalUsers: users.length, completed, inProgress, notStarted,
     spreadsheetUrl: getSpreadsheet_().getUrl(),
-    recent: adminUsersData_().sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, 8)
+    recent: adminUsersDataFromRows_(users, biodata, assessments).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, 8)
   };
 }
 
@@ -327,7 +398,12 @@ function decorateResult_(result) {
 function adminUsersData_() {
   const biodata = indexBy_(rowsAsObjects_("Biodata"), "user_id");
   const assessments = rowsAsObjects_("Assessments");
-  return rowsAsObjects_("Users").filter(user => user.role === "user").map(user => {
+  const users = rowsAsObjects_("Users").filter(user => user.role === "user");
+  return adminUsersDataFromRows_(users, biodata, assessments);
+}
+
+function adminUsersDataFromRows_(users, biodata, assessments) {
+  return users.map(user => {
     const latest = assessments.filter(item => item.user_id === user.id).sort(sortNewest_)[0];
     return Object.assign(safeUser_(user), biodata[user.id] || {}, {
       assessment_status: latest ? latest.status : "not_started",
@@ -341,7 +417,8 @@ function createSessionResponse_(user) {
   const token = randomToken_();
   const expiresAt = Date.now() + SESSION_TTL_MS;
   PropertiesService.getScriptProperties().setProperty(sessionKey_(token), JSON.stringify({ userId: user.id, role: user.role, expiresAt }));
-  return { token, expiresAt: new Date(expiresAt).toISOString(), user: safeUser_(user) };
+  const assessment = latestByUser_("Assessments", user.id);
+  return { token, expiresAt: new Date(expiresAt).toISOString(), user: safeUser_(user), assessmentStatus: assessment ? assessment.status : "not_started" };
 }
 
 function requireUser_(token) {
@@ -399,36 +476,24 @@ function responseToAnswers_(response) {
 }
 
 function seedErq30Questions() {
-  ensureSheet_(getSpreadsheet_(), "Questions", SHEETS.Questions);
-  ERQ30_QUESTIONS.forEach(item => {
-    const number = item[0];
-    const id = `Q${String(number).padStart(2, "0")}`;
-    upsertObject_("Questions", "id", id, {
-      id,
-      question_number: number,
-      question_text_en: item[1],
-      question_text_id: item[2],
-      strategy: item[3],
-      scale_min: 1,
-      scale_max: 7,
-      translation_status: "draft_translation",
-      is_active: true
-    });
-  });
+  writeErq30Questions_();
   return "30 item ERQ-30 bilingual berhasil dimasukkan tanpa duplikasi.";
 }
 
 function reseedErq30Questions() {
+  writeErq30Questions_();
+  return "Sheet Questions telah diganti dengan tepat 30 item ERQ-30 bilingual. Sheet lain tidak diubah.";
+}
+
+function writeErq30Questions_() {
   const sheet = ensureSheet_(getSpreadsheet_(), "Questions", SHEETS.Questions);
-  const lastRow = sheet.getLastRow();
-  if (lastRow >= 2) {
-    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-    for (let index = ids.length - 1; index >= 0; index -= 1) {
-      if (/^Q(?:0[1-9]|[12]\d|30)$/.test(String(ids[index][0]))) sheet.deleteRow(index + 2);
-    }
-  }
-  seedErq30Questions();
-  return "Baris Q01–Q30 telah diganti dengan dataset ERQ-30 bilingual terbaru. Sheet lain tidak diubah.";
+  const rows = ERQ30_QUESTIONS.map(item => [
+    `Q${String(item[0]).padStart(2, "0")}`, item[0], item[1], item[2], item[3], 1, 7, "draft_translation", true
+  ]);
+  return withScriptLock_(() => {
+    if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(sheet.getLastColumn(), SHEETS.Questions.length)).clearContent();
+    sheet.getRange(2, 1, rows.length, SHEETS.Questions.length).setValues(rows);
+  });
 }
 
 function seedMaterials_() {
@@ -452,12 +517,37 @@ function ensureSheet_(spreadsheet, name, headers) {
   let sheet = spreadsheet.getSheetByName(name);
   if (!sheet) sheet = spreadsheet.insertSheet(name);
   const current = sheet.getLastColumn() ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0] : [];
-  if (!current.length || current.join("|") !== headers.join("|")) {
+  if (!current.length || current.every(value => value === "")) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setBackground("#f1edff");
     sheet.setFrozenRows(1);
     sheet.autoResizeColumns(1, headers.length);
+  } else {
+    const normalized = current.filter(value => value !== "").map(normalizeHeader_);
+    const expected = headers.concat(normalized.filter(header => headers.indexOf(header) < 0));
+    if (normalized.join("|") !== expected.join("|")) repairSheet_(spreadsheet, name, headers);
   }
   return sheet;
+}
+
+function repairSheet_(spreadsheet, name, requiredHeaders) {
+  let sheet = spreadsheet.getSheetByName(name);
+  if (!sheet) sheet = spreadsheet.insertSheet(name);
+  const values = sheet.getLastRow() && sheet.getLastColumn() ? sheet.getDataRange().getValues() : [];
+  const rawHeaders = values.length ? values[0] : [];
+  const aliases = { question_text: "question_text_en" };
+  const normalizedHeaders = rawHeaders.map(value => aliases[normalizeHeader_(value)] || normalizeHeader_(value));
+  const extras = normalizedHeaders.filter((header, index) => header && requiredHeaders.indexOf(header) < 0 && normalizedHeaders.indexOf(header) === index);
+  const finalHeaders = requiredHeaders.concat(extras);
+  const migratedRows = values.slice(1).filter(row => row.some(value => value !== "")).map(row => finalHeaders.map(header => {
+    const index = normalizedHeaders.indexOf(header);
+    return index >= 0 ? row[index] : "";
+  }));
+  if (sheet.getLastRow() && sheet.getLastColumn()) sheet.getDataRange().clearContent();
+  sheet.getRange(1, 1, 1, finalHeaders.length).setValues([finalHeaders]).setFontWeight("bold").setBackground("#f1edff");
+  if (migratedRows.length) sheet.getRange(2, 1, migratedRows.length, finalHeaders.length).setValues(migratedRows);
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, finalHeaders.length);
+  return { rowsPreserved: migratedRows.length, headers: finalHeaders };
 }
 
 function rowsAsObjects_(sheetName) {
@@ -469,30 +559,33 @@ function rowsAsObjects_(sheetName) {
 }
 
 function appendObject_(sheetName, object) {
+  return withScriptLock_(() => appendObjectUnlocked_(sheetName, object));
+}
+
+function appendObjectUnlocked_(sheetName, object) {
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
   const headers = SHEETS[sheetName];
-  const lock = LockService.getScriptLock(); lock.waitLock(15000);
-  try { sheet.appendRow(headers.map(header => object[header] == null ? "" : object[header])); }
-  finally { lock.releaseLock(); }
+  sheet.appendRow(headers.map(header => object[header] == null ? "" : object[header]));
 }
 
 function upsertObject_(sheetName, key, value, object) {
+  return withScriptLock_(() => upsertObjectUnlocked_(sheetName, key, value, object));
+}
+
+function upsertObjectUnlocked_(sheetName, key, value, object) {
   const sheet = getSpreadsheet_().getSheetByName(sheetName);
   const headers = SHEETS[sheetName];
   const keyIndex = headers.indexOf(key);
-  const lock = LockService.getScriptLock(); lock.waitLock(15000);
-  try {
-    const lastRow = sheet.getLastRow();
-    let rowNumber = 0;
-    if (lastRow >= 2) {
-      const values = sheet.getRange(2, keyIndex + 1, lastRow - 1, 1).getValues();
-      const found = values.findIndex(row => String(row[0]) === String(value));
-      if (found >= 0) rowNumber = found + 2;
-    }
-    const row = headers.map(header => object[header] == null ? "" : object[header]);
-    if (rowNumber) sheet.getRange(rowNumber, 1, 1, headers.length).setValues([row]);
-    else sheet.appendRow(row);
-  } finally { lock.releaseLock(); }
+  const lastRow = sheet.getLastRow();
+  let rowNumber = 0;
+  if (lastRow >= 2) {
+    const values = sheet.getRange(2, keyIndex + 1, lastRow - 1, 1).getValues();
+    const found = values.findIndex(row => String(row[0]) === String(value));
+    if (found >= 0) rowNumber = found + 2;
+  }
+  const row = headers.map(header => object[header] == null ? "" : object[header]);
+  if (rowNumber) sheet.getRange(rowNumber, 1, 1, headers.length).setValues([row]);
+  else sheet.appendRow(row);
 }
 
 function findBy_(sheetName, key, value) { return rowsAsObjects_(sheetName).find(row => String(row[key]) === String(value)) || null; }
@@ -502,6 +595,7 @@ function indexBy_(rows, key) { return rows.reduce((index, row) => { index[row[ke
 function objectFromRow_(headers, row) { return headers.reduce((object, header, index) => { object[header] = normalizeCell_(row[index]); return object; }, {}); }
 function normalizeCell_(value) { return value instanceof Date ? value.toISOString() : value; }
 function normalizeEmail_(email) { return String(email || "").trim().toLowerCase(); }
+function normalizeHeader_(header) { return String(header || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""); }
 function truthy_(value) { return value === true || String(value).toLowerCase() === "true" || Number(value) === 1; }
 function safeUser_(user) { return { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status, created_at: user.created_at, updated_at: user.updated_at }; }
 function now_() { return new Date().toISOString(); }
@@ -514,4 +608,16 @@ function constantTimeEqual_(a, b) { a = String(a); b = String(b); if (a.length !
 function getAppSecret_() { const secret = PropertiesService.getScriptProperties().getProperty("APP_SECRET"); if (!secret || secret.length < 32) throw new Error("APP_SECRET belum diatur atau terlalu pendek."); return secret; }
 function verifyApiSecret_(secret) { if (!constantTimeEqual_(String(secret || ""), getAppSecret_())) throw new Error("Permintaan API tidak diizinkan."); }
 function requireFields_(payload, fields) { fields.forEach(field => { if (payload[field] == null || String(payload[field]).trim() === "") throw new Error(`${field} wajib diisi.`); }); }
+function withScriptLock_(callback) { const lock = LockService.getScriptLock(); lock.waitLock(15000); try { return callback(); } finally { lock.releaseLock(); } }
+function errorCode_(message) {
+  if (/sesi/i.test(message)) return "UNAUTHENTICATED";
+  if (/admin|akses/i.test(message)) return "FORBIDDEN";
+  if (/tidak ditemukan/i.test(message)) return "NOT_FOUND";
+  if (/terdaftar/i.test(message)) return "DUPLICATE_EMAIL";
+  if (/wajib|valid|harus|belum|password/i.test(message)) return "VALIDATION_ERROR";
+  return "INTERNAL_ERROR";
+}
+function logEvent_(event, metadata) { console.log(JSON.stringify({ event, metadata: metadata || {}, at: now_() })); }
+function jsonSuccess(data) { return json_({ success: true, data }); }
+function jsonError(code, message) { return json_({ success: false, error: { code, message } }); }
 function json_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }
