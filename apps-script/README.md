@@ -14,7 +14,7 @@ Fungsi `setupDatabase()` akan membuat tujuh worksheet berikut beserta seluruh ju
 6. `Results`
 7. `Materials`
 
-Sheet `Questions` juga akan mendapat 30 baris kosong Q01–Q30 dengan pemetaan strategi dan skala 1–7. Redaksi pertanyaan sengaja tidak diisi otomatis. Masukkan hanya teks dari dokumen ERQ-30 yang telah disetujui pemilik riset.
+Sheet `Questions` akan langsung mendapat 30 item Q01–Q30. Kolom `question_text_en` berisi redaksi Inggris persis dari PDF resmi Preece & Gross (2026). Kolom `question_text_id` berisi terjemahan proyek dan selalu ditandai `draft_translation`, bukan versi Indonesia yang tervalidasi. Seluruh item memakai skala 1–7 dan langsung aktif.
 
 ## Langkah setup
 
@@ -70,14 +70,20 @@ Salin hasilnya tanpa spasi. Jangan membagikan nilai ini dan jangan menaruhnya da
 
 Jika fungsi dijalankan lagi, sheet yang sudah ada tidak akan dihapus.
 
-### 5. Isi instrumen ERQ-30 resmi
+### 5. Periksa instrumen ERQ-30
+
+Tidak ada pengisian manual yang diperlukan. Setelah `setupDatabase()` selesai:
 
 1. Buka worksheet `Questions`.
-2. Isi kolom `question_text` memakai redaksi persis dari dokumen ERQ-30 yang telah disetujui.
-3. Jangan menerjemahkan atau menyederhanakan redaksi sendiri.
-4. Setelah memastikan seluruh 30 butir benar, ubah `is_active` menjadi `TRUE` pada Q01–Q30.
+2. Pastikan terdapat tepat 30 item, Q01 sampai Q30.
+3. Pastikan `translation_status` berisi `draft_translation` dan `is_active` berisi `TRUE`.
+4. Teks Inggris adalah sumber resmi. Teks Indonesia adalah terjemahan proyek untuk ditinjau dan tidak boleh disebut versi Indonesia tervalidasi.
 
-Pengukuran di website hanya dapat dimulai jika tepat 30 butir aktif dan memiliki teks.
+Jika worksheet `Questions` sudah ada dari versi Emora sebelumnya, salin kode Apps Script terbaru lalu jalankan `reseedErq30Questions()` satu kali. Fungsi tersebut hanya mengganti baris Q01–Q30 dan tidak mengubah Users, Biodata, Assessments, Responses, Results, atau Materials.
+
+`seedErq30Questions()` aman dijalankan berulang kali karena memperbarui item berdasarkan ID tanpa membuat duplikasi.
+
+Dokumentasi resmi menyatakan bahwa penerjemahan, adaptasi, atau modifikasi ERQ-30 memerlukan izin tambahan dari pemegang hak cipta. Dapatkan izin tersebut sebelum menggunakan terjemahan proyek dalam pelaksanaan riset.
 
 ### 6. Deploy sebagai Web App
 

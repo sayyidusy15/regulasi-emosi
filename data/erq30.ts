@@ -11,6 +11,5 @@ export const questions: Question[] = Array.from({length:30}, (_, index) => ({
 
 export const likert = {
   min:1, max:7,
-  startLabel:"Sangat tidak sesuai",
-  endLabel:"Sangat sesuai",
+  labels:{1:"Sangat Tidak Setuju",4:"Netral",7:"Sangat Setuju"} as Record<number,string>,
 };

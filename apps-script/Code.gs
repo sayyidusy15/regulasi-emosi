@@ -6,7 +6,7 @@
 const SHEETS = {
   Users: ["id", "name", "email", "password_hash", "password_salt", "role", "status", "created_at", "updated_at"],
   Biodata: ["id", "user_id", "nama", "usia", "jenis_kelamin", "pendidikan", "pekerjaan", "domisili", "created_at", "updated_at"],
-  Questions: ["id", "question_number", "question_text", "strategy", "scale_min", "scale_max", "is_active"],
+  Questions: ["id", "question_number", "question_text_en", "question_text_id", "strategy", "scale_min", "scale_max", "translation_status", "is_active"],
   Assessments: ["id", "user_id", "status", "started_at", "completed_at", "created_at"],
   Responses: ["assessment_id", "user_id"].concat(Array.from({ length: 30 }, (_, i) => `Q${String(i + 1).padStart(2, "0")}`), ["updated_at", "submitted_at"]),
   Results: [
@@ -33,6 +33,47 @@ const STRATEGIES = [
   { key: "social_sharing", label: "Social Sharing", items: [7, 17, 26], mean: 12.01, sd: 4.97 }
 ];
 
+/**
+ * English wording copied exactly from the official Preece & Gross (2026)
+ * ERQ-30 questionnaire supplied by the project owner.
+ *
+ * The Indonesian wording is a project translation based on the original
+ * ERQ-30 and must not be represented as an officially validated Indonesian
+ * version. Translation/adaptation requires permission from the copyright holders.
+ */
+const ERQ30_QUESTIONS = [
+  [1, "When I want to feel more positive emotion (such as joy or amusement), I change the way I’m thinking about the situation.", "Ketika saya ingin merasakan lebih banyak emosi positif (seperti kegembiraan atau rasa terhibur), saya mengubah cara saya memikirkan situasi tersebut.", "Cognitive Reappraisal"],
+  [2, "I keep my emotions to myself.", "Saya menyimpan emosi saya untuk diri sendiri.", "Expressive Suppression"],
+  [3, "When I want to feel less negative emotion (such as sadness or anger), I change the way I’m thinking about the situation.", "Ketika saya ingin merasakan lebih sedikit emosi negatif (seperti kesedihan atau kemarahan), saya mengubah cara saya memikirkan situasi tersebut.", "Cognitive Reappraisal"],
+  [4, "I control my emotions by regularly doing pleasant and meaningful activities throughout my week.", "Saya mengendalikan emosi saya dengan secara rutin melakukan kegiatan yang menyenangkan dan bermakna sepanjang minggu.", "Behavioral Activation"],
+  [5, "When I am faced with a stressful situation, I try to get away from that situation as quickly as possible.", "Ketika saya menghadapi situasi yang penuh tekanan, saya berusaha menjauh dari situasi tersebut secepat mungkin.", "Situational Avoidance"],
+  [6, "When I want to feel more positive emotion, I look for practical solutions that will fix the issues or unpleasant situations in my life.", "Ketika saya ingin merasakan lebih banyak emosi positif, saya mencari solusi praktis yang akan mengatasi masalah atau situasi tidak menyenangkan dalam hidup saya.", "Problem Solving"],
+  [7, "I control my emotions by talking with other people about what I’m feeling.", "Saya mengendalikan emosi saya dengan berbicara kepada orang lain tentang apa yang saya rasakan.", "Social Sharing"],
+  [8, "When I am faced with a stressful situation, I manage my emotions by repeatedly thinking about the negative parts of the situation.", "Ketika saya menghadapi situasi yang penuh tekanan, saya mengelola emosi saya dengan berulang kali memikirkan bagian-bagian negatif dari situasi tersebut.", "Rumination"],
+  [9, "When I want to feel less negative emotion, I distract myself.", "Ketika saya ingin merasakan lebih sedikit emosi negatif, saya mengalihkan perhatian saya.", "Distraction"],
+  [10, "I control my emotions by accepting the things in my life that I cannot change.", "Saya mengendalikan emosi saya dengan menerima hal-hal dalam hidup saya yang tidak dapat saya ubah.", "Acceptance"],
+  [11, "When I want to feel more positive emotion, I retreat into my own space, away from others.", "Ketika saya ingin merasakan lebih banyak emosi positif, saya menarik diri ke ruang saya sendiri, menjauh dari orang lain.", "Social Withdrawal"],
+  [12, "I control my emotions by changing the way I think about the situation I’m in.", "Saya mengendalikan emosi saya dengan mengubah cara saya memikirkan situasi yang sedang saya hadapi.", "Cognitive Reappraisal"],
+  [13, "I control my emotions by not expressing them.", "Saya mengendalikan emosi saya dengan tidak mengekspresikannya.", "Expressive Suppression"],
+  [14, "When I want to feel more positive emotion, I make a point of doing enjoyable activities throughout the week that are consistent with what I want in life.", "Ketika saya ingin merasakan lebih banyak emosi positif, saya secara sengaja melakukan kegiatan menyenangkan sepanjang minggu yang selaras dengan apa yang saya inginkan dalam hidup.", "Behavioral Activation"],
+  [15, "When I want to feel less negative emotion, I avoid any situations that seem like they potentially may get stressful.", "Ketika saya ingin merasakan lebih sedikit emosi negatif, saya menghindari situasi apa pun yang tampaknya berpotensi menjadi penuh tekanan.", "Situational Avoidance"],
+  [16, "When I am faced with a stressful situation, I make realistic plans to help solve the situation.", "Ketika saya menghadapi situasi yang penuh tekanan, saya membuat rencana realistis untuk membantu menyelesaikan situasi tersebut.", "Problem Solving"],
+  [17, "When I want to feel more positive emotion, I let others know what I’m feeling.", "Ketika saya ingin merasakan lebih banyak emosi positif, saya memberi tahu orang lain tentang apa yang saya rasakan.", "Social Sharing"],
+  [18, "I manage my emotions by ‘ruminating’ about stressful situations (thinking about the bad parts of situations again and again).", "Saya mengelola emosi saya dengan melakukan ‘ruminasi’ tentang situasi yang penuh tekanan (memikirkan bagian-bagian buruk dari situasi tersebut berulang kali).", "Rumination"],
+  [19, "During stressful situations, I distract myself to feel better.", "Selama situasi yang penuh tekanan, saya mengalihkan perhatian saya agar merasa lebih baik.", "Distraction"],
+  [20, "When I want to feel more positive emotion, I try to accept the parts of upsetting situations in my life that I cannot change.", "Ketika saya ingin merasakan lebih banyak emosi positif, saya mencoba menerima bagian-bagian dari situasi yang mengusik perasaan dalam hidup saya yang tidak dapat saya ubah.", "Acceptance"],
+  [21, "I control my emotions by distancing myself from other people.", "Saya mengendalikan emosi saya dengan menjaga jarak dari orang lain.", "Social Withdrawal"],
+  [22, "When I am feeling negative emotions, I make sure not to express them.", "Ketika saya merasakan emosi negatif, saya memastikan untuk tidak mengekspresikannya.", "Expressive Suppression"],
+  [23, "When I want to feel less negative emotion, I make sure to do things that will get me energized by moving physically.", "Ketika saya ingin merasakan lebih sedikit emosi negatif, saya memastikan untuk melakukan hal-hal yang membuat saya lebih berenergi dengan bergerak secara fisik.", "Behavioral Activation"],
+  [24, "When I want to feel more positive emotion, I try to avoid all situations that might end up being uncomfortable.", "Ketika saya ingin merasakan lebih banyak emosi positif, saya mencoba menghindari semua situasi yang pada akhirnya mungkin terasa tidak nyaman.", "Situational Avoidance"],
+  [25, "I control my emotions by solving the problems or stressful situations in my life.", "Saya mengendalikan emosi saya dengan menyelesaikan masalah atau situasi yang penuh tekanan dalam hidup saya.", "Problem Solving"],
+  [26, "When I am faced with a stressful situation, I share what I’m feeling in order to feel better.", "Ketika saya menghadapi situasi yang penuh tekanan, saya membagikan apa yang saya rasakan agar merasa lebih baik.", "Social Sharing"],
+  [27, "When I want to feel better about an upsetting situation, I go over and over what happened and why.", "Ketika saya ingin merasa lebih baik tentang situasi yang mengusik perasaan, saya memikirkan berulang kali apa yang terjadi dan mengapa hal itu terjadi.", "Rumination"],
+  [28, "I distract myself during upsetting situations to feel better.", "Saya mengalihkan perhatian saya selama situasi yang mengusik perasaan agar merasa lebih baik.", "Distraction"],
+  [29, "When I am faced with a stressful situation, I try to keep calm by accepting the parts of it that I cannot change.", "Ketika saya menghadapi situasi yang penuh tekanan, saya berusaha tetap tenang dengan menerima bagian-bagian dari situasi tersebut yang tidak dapat saya ubah.", "Acceptance"],
+  [30, "When I want to feel less negative emotion, I isolate myself, away from friends or family.", "Ketika saya ingin merasakan lebih sedikit emosi negatif, saya mengisolasi diri, menjauh dari teman atau keluarga.", "Social Withdrawal"]
+];
+
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 // Edit this one list if the study later changes its demographic fields.
 const BIODATA_FIELDS = ["nama", "usia", "jenis_kelamin", "pendidikan", "pekerjaan", "domisili"];
@@ -40,9 +81,9 @@ const BIODATA_FIELDS = ["nama", "usia", "jenis_kelamin", "pendidikan", "pekerjaa
 function setupDatabase() {
   const spreadsheet = getSpreadsheet_();
   Object.keys(SHEETS).forEach(name => ensureSheet_(spreadsheet, name, SHEETS[name]));
-  seedQuestionSlots_();
+  seedErq30Questions();
   seedMaterials_();
-  return "Database Emora siap. Isi question_text dan ubah is_active menjadi TRUE hanya untuk butir ERQ-30 yang telah disetujui.";
+  return "Database Emora siap. Semua 30 item ERQ-30 telah dimasukkan dan diaktifkan.";
 }
 
 function doGet(e) {
@@ -161,7 +202,7 @@ function startAssessment_(payload) {
     appendObject_("Assessments", assessment);
   }
   const response = findBy_("Responses", "assessment_id", assessment.id);
-  const questions = rowsAsObjects_("Questions").filter(row => truthy_(row.is_active) && String(row.question_text).trim()).sort((a, b) => Number(a.question_number) - Number(b.question_number));
+  const questions = rowsAsObjects_("Questions").filter(row => truthy_(row.is_active) && String(row.question_text_en).trim()).sort((a, b) => Number(a.question_number) - Number(b.question_number));
   return { assessment, answers: responseToAnswers_(response), questions };
 }
 
@@ -357,16 +398,37 @@ function responseToAnswers_(response) {
   return answers;
 }
 
-function seedQuestionSlots_() {
-  if (rowsAsObjects_("Questions").length) return;
-  const strategyByQuestion = {};
-  STRATEGIES.forEach(strategy => strategy.items.forEach(number => strategyByQuestion[number] = strategy.label));
-  for (let number = 1; number <= 30; number += 1) {
-    appendObject_("Questions", {
-      id: `Q${String(number).padStart(2, "0")}`, question_number: number, question_text: "",
-      strategy: strategyByQuestion[number], scale_min: 1, scale_max: 7, is_active: false
+function seedErq30Questions() {
+  ensureSheet_(getSpreadsheet_(), "Questions", SHEETS.Questions);
+  ERQ30_QUESTIONS.forEach(item => {
+    const number = item[0];
+    const id = `Q${String(number).padStart(2, "0")}`;
+    upsertObject_("Questions", "id", id, {
+      id,
+      question_number: number,
+      question_text_en: item[1],
+      question_text_id: item[2],
+      strategy: item[3],
+      scale_min: 1,
+      scale_max: 7,
+      translation_status: "draft_translation",
+      is_active: true
     });
+  });
+  return "30 item ERQ-30 bilingual berhasil dimasukkan tanpa duplikasi.";
+}
+
+function reseedErq30Questions() {
+  const sheet = ensureSheet_(getSpreadsheet_(), "Questions", SHEETS.Questions);
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let index = ids.length - 1; index >= 0; index -= 1) {
+      if (/^Q(?:0[1-9]|[12]\d|30)$/.test(String(ids[index][0]))) sheet.deleteRow(index + 2);
+    }
   }
+  seedErq30Questions();
+  return "Baris Q01–Q30 telah diganti dengan dataset ERQ-30 bilingual terbaru. Sheet lain tidak diubah.";
 }
 
 function seedMaterials_() {
