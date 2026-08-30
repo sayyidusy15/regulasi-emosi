@@ -4,12 +4,6 @@ import { ArrowRight, BookOpen, ClipboardCheck, HeartHandshake, LockKeyhole, Rock
 import { Footer, PublicNavbar } from "@/components/emora";
 import { materials, strategies } from "@/data/emora";
 
-const miniStrategies = [
-  ["01", "Refleksi positif", "coral"], ["02", "Fokus hal positif", "yellow"],
-  ["03", "Penerimaan", "mint"], ["04", "Memikirkan hal lain", "sky"],
-  ["05", "Dukungan sosial", "lavender"],
-] as const;
-
 export default function Home() {
   return (
     <main className="site-shell">
@@ -31,18 +25,12 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="hero-visual" aria-label="Ilustrasi seseorang menggunakan Emora">
-          <div className="strategy-note">10 strategi regulasi emosi <span>⌁</span></div>
-          <div className="strategy-strip">
-            {miniStrategies.map(([number,label,color]) => <div className={`mini-strategy ${color}`} key={number}><b>{number}</b><span>{label}</span></div>)}
-          </div>
-          <Image src="/images/emora-hero.png" alt="Perempuan muda bersantai sambil menggunakan tablet" width={1536} height={1024} priority />
-          <div className="result-preview">
-            <div><strong>Ringkasan hasilmu</strong><span>Contoh</span></div>
-            <div className="score-row"><b>78</b><div><i style={{width:"78%"}} /><small>Refleksi positif</small></div></div>
-            <div className="score-row"><b>72</b><div><i style={{width:"72%"}} /><small>Dukungan sosial</small></div></div>
-          </div>
-          <span className="face face-one">⌣</span><span className="face face-two">⌣</span>
+        <div className="hero-visual hero-composition" aria-label="Ilustrasi seseorang menggunakan Emora dengan strategi regulasi emosi dan ringkasan hasil">
+          <Image className="hero-strategies-layer" src="/images/10-strategi-regulasi.png" alt="Sepuluh strategi regulasi emosi" width={1254} height={1254} priority />
+          <Image className="hero-person-layer" src="/images/people-hero.png" alt="Perempuan muda duduk santai sambil menggunakan tablet" width={1086} height={1448} priority />
+          <Image className="hero-result-layer" src="/images/ringkasan-hasil.png" alt="Contoh ringkasan hasil regulasi emosi" width={1448} height={1086} priority />
+          <span className="hero-squiggle" aria-hidden="true">⌁</span>
+          <span className="hero-spark" aria-hidden="true">✦</span>
         </div>
       </section>
 
