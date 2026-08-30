@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, ClipboardList, FileBarChart, Home, LayoutDashboard, LogOut, Menu, Sparkles, UserRound, UsersRound } from "lucide-react";
+import { ArrowRight, BookOpen, ClipboardList, FileBarChart, Home, LayoutDashboard, Menu, Sparkles, UserRound, UsersRound } from "lucide-react";
+import { SessionProfile } from "@/components/client";
 
 export function EmoraLogo({admin=false}:{admin?:boolean}) {
   return <Link href={admin?"/admin":"/"} className="brand" aria-label={admin?"Emora Admin":"Emora, beranda"}>
@@ -37,8 +38,8 @@ const adminLinks = [
 export function DashboardShell({children,active,admin=false,title,description}:{children:React.ReactNode;active:string;admin?:boolean;title:string;description?:string}){
   const links=admin?adminLinks:userLinks;
   return <div className={`dashboard-shell ${admin?"admin-mode":""}`}>
-    <aside className="sidebar"><EmoraLogo admin={admin}/><nav>{links.map(([href,label,Icon])=><Link key={href} className={active===href?"active":""} href={href}><Icon size={19}/>{label}</Link>)}</nav><div className="sidebar-profile"><span>{admin?"AR":"NP"}</span><p><strong>{admin?"Admin Riset":"Nadia Putri"}</strong><small>{admin?"admin@emora.id":"nadia@example.com"}</small></p><LogOut size={18}/></div></aside>
-    <main className="dashboard-main"><header className="dashboard-header"><div><small>{admin?"RUANG PENELITI":"RUANG KAMU"}</small><h1>{title}</h1>{description&&<p>{description}</p>}</div><div className="header-profile"><span>{admin?"AR":"NP"}</span><strong>{admin?"Admin":"Nadia"}</strong></div></header>{children}</main>
+    <aside className="sidebar"><EmoraLogo admin={admin}/><nav>{links.map(([href,label,Icon])=><Link key={href} className={active===href?"active":""} href={href}><Icon size={19}/>{label}</Link>)}</nav><SessionProfile admin={admin}/></aside>
+    <main className="dashboard-main"><header className="dashboard-header"><div><small>{admin?"RUANG PENELITI":"RUANG KAMU"}</small><h1>{title}</h1>{description&&<p>{description}</p>}</div></header>{children}</main>
     <nav className="bottom-nav">{links.slice(0,5).map(([href,label,Icon])=><Link key={href} className={active===href?"active":""} href={href}><Icon size={20}/><span>{label.split(" ")[0]}</span></Link>)}</nav>
   </div>
 }

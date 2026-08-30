@@ -1,6 +1,4 @@
-import { Eye, LockKeyhole } from "lucide-react";
-import { AdminPageNote } from "@/components/admin";
+import { AdminInstrument } from "@/components/admin-client";
 import { DashboardShell } from "@/components/emora";
-import { questions } from "@/data/erq30";
 
-export default function Instrumen(){return <DashboardShell admin active="/admin/instrumen" title="Instrumen ERQ-30" description="Tinjau struktur instrumen yang digunakan dalam pengukuran."><AdminPageNote>Butir di bawah masih berupa placeholder. Teks tervalidasi dan aturan skoring resmi harus disediakan pemilik riset sebelum penggunaan nyata.</AdminPageNote><div className="instrument-summary"><div><strong>30</strong><span>Item instrumen</span></div><div><strong>10</strong><span>Strategi</span></div><button className="secondary-button"><Eye size={18}/>Preview instrumen</button></div><div className="table-card instrument-table"><div className="filter-bar"><input placeholder="Cari nomor item..."/><select><option>Semua strategi</option><option>Strategi 01</option></select><span>30 item</span></div><div className="table-scroll"><table><thead><tr><th>Nomor</th><th>Item</th><th>Strategi</th><th>Status</th></tr></thead><tbody>{questions.slice(0,12).map(q=><tr key={q.id}><td><strong>Q{String(q.id).padStart(2,"0")}</strong></td><td>{q.text}</td><td>Strategi {String(q.strategyId).padStart(2,"0")}</td><td><span className="locked"><LockKeyhole/>Terkunci</span></td></tr>)}</tbody></table></div></div></DashboardShell>}
+export default function Instrumen(){return <DashboardShell admin active="/admin/instrumen" title="Instrumen ERQ-30" description="Tinjau struktur instrumen yang digunakan dalam pengukuran."><AdminInstrument/></DashboardShell>}

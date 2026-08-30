@@ -1,10 +1,22 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Info } from "lucide-react";
 import { Footer, PublicNavbar } from "@/components/emora";
-import { materials } from "@/data/emora";
+import { getPublishedMaterials } from "@/lib/materials";
 
 type Props={params:Promise<{slug:string}>};
-export async function generateMetadata({params}:Props):Promise<Metadata>{const {slug}=await params;const item=materials.find(m=>m.slug===slug)??materials[0];return {title:item.title,description:item.intro,openGraph:{title:item.title,description:item.intro,images:[]},twitter:{card:"summary",title:item.title,description:item.intro,images:[]}}}
+export const dynamic="force-dynamic";
 
-export default async function Article({params}:Props){const {slug}=await params;const item=materials.find(m=>m.slug===slug)??materials[0];return <main className="site-shell article-page"><PublicNavbar active="materi"/><article><Link className="back-link" href="/materi"><ArrowLeft size={17}/>Kembali ke materi</Link><header><span>{item.category} · {item.read}</span><h1>{item.title}</h1><p>{item.intro}</p></header><div className={`article-opening ${item.color}`}><span className="blob-face">•‿•</span><p>Emosi bukan gangguan yang harus selalu segera dihilangkan. Ia membawa informasi tentang apa yang kita alami.</p></div><section><h2>Mulai dari mengenali</h2><p>Regulasi emosi adalah proses yang kita gunakan untuk memengaruhi emosi yang dirasakan, kapan emosi itu muncul, serta bagaimana kita mengalami dan mengekspresikannya. Dalam keseharian, proses ini bisa berlangsung dengan sadar maupun otomatis.</p><p>Respons setiap orang dapat berbeda karena pengalaman, kebiasaan, kondisi, dan konteks yang juga berbeda. Karena itu, membaca pola emosi lebih berguna bila dilakukan dengan rasa ingin tahu—bukan dengan menghakimi diri.</p><blockquote>Tujuannya bukan selalu merasa baik. Tujuannya adalah merespons dengan cara yang lebih selaras dengan keadaan dan kebutuhanmu.</blockquote><h2>Strategi bukan label</h2><p>Sebuah strategi dapat terasa membantu dalam satu situasi, tetapi belum tentu cocok di situasi lain. Hasil pengukuran perlu dibaca sebagai gambaran dimensi yang muncul dari jawaban, bukan sebagai diagnosis atau penentu nilai diri.</p><div className="article-note"><Info/><p><strong>Catatan penting</strong><span>Materi Emora bersifat edukatif. Untuk dukungan profesional, hubungi tenaga kesehatan yang sesuai.</span></p></div></section><footer><p>Selanjutnya</p><Link href="/app/pengukuran">Kenali pola regulasi emosimu <ArrowRight size={18}/></Link></footer></article><Footer/></main>}
+async function findMaterial(slug:string){return (await getPublishedMaterials()).find(material=>material.slug===slug)}
+export async function generateMetadata({params}:Props):Promise<Metadata>{
+  const {slug}=await params; const item=await findMaterial(slug);
+  if(!item)return {title:"Materi tidak ditemukan",openGraph:{images:[]},twitter:{images:[]}};
+  return {title:item.title,description:item.summary,openGraph:{title:item.title,description:item.summary,images:[]},twitter:{card:"summary",title:item.title,description:item.summary,images:[]}};
+}
+
+export default async function Article({params}:Props){
+  const {slug}=await params; const item=await findMaterial(slug); if(!item)notFound();
+  const paragraphs=item.content.split(/\n{2,}/).filter(Boolean);
+  return <main className="site-shell article-page"><PublicNavbar active="materi"/><article><Link className="back-link" href="/materi"><ArrowLeft size={17}/>Kembali ke materi</Link><header><span>MATERI EMORA</span><h1>{item.title}</h1><p>{item.summary}</p></header><div className="article-opening mint"><span className="blob-face">•‿•</span><p>{paragraphs[0]||item.summary}</p></div><section>{paragraphs.slice(1).map((paragraph,index)=><p key={index}>{paragraph}</p>)}<div className="article-note"><Info/><p><strong>Catatan penting</strong><span>Materi Emora bersifat edukatif. Untuk dukungan profesional, hubungi tenaga kesehatan yang sesuai.</span></p></div></section><footer><p>Selanjutnya</p><Link href="/app/pengukuran">Kenali pola regulasi emosimu <ArrowRight size={18}/></Link></footer></article><Footer/></main>
+}
